@@ -1,0 +1,20 @@
+{
+  "name": "bilayn-game-generator",
+  "version": "0.1.0",
+  "description": "Генератор браузерных HTML5-игр по текстовому промпту (кейс Билайна)",
+  "main": "server.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  }
+}
