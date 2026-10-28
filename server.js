@@ -63,7 +63,7 @@ async function handleGenerate(req, res) {
   try {
     const html = await generateGame(
       { prompt, audience, previous, change },
-      { apiKey: process.env.ANTHROPIC_API_KEY, model: MODEL },
+      { apiKey: process.env.ANTHROPIC_API_KEY, model: MODEL, baseUrl: process.env.ANTHROPIC_BASE_URL || undefined },
     );
     return send(res, 200, { html });
   } catch (err) {

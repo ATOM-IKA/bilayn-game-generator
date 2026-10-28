@@ -5,16 +5,19 @@ LLM генерирует самодостаточную HTML5-игру (Canvas +
 
 ## Запуск
 
-Требуется Node.js 22+ и ключ Anthropic API.
+Требуется Node.js 22+ и ключ Anthropic API (получить: https://console.anthropic.com → API Keys, нужен баланс на счёте).
 
 ```bash
 npm install
-export ANTHROPIC_API_KEY=sk-ant-...      # ключ только на сервере, в браузер не передаётся
-npm start                                 # http://localhost:3000
-npm test                                  # юнит-тесты и тесты сервера
+cp .env.example .env        # впишите ключ: ANTHROPIC_API_KEY=sk-ant-...
+npm start                   # http://localhost:3000
+npm test                    # юнит-тесты и тесты сервера
+npm run e2e                 # сквозная проверка в Chromium с подменой LLM (нужен Chromium, CHROMIUM_PATH)
 ```
 
-Модель по умолчанию: `claude-sonnet-5-5`, меняется переменной `ANTHROPIC_MODEL`.
+Ключ хранится только на сервере (файл `.env` в git не попадает), в браузер не передаётся.
+Модель по умолчанию `claude-sonnet-5-5`, меняется переменной `ANTHROPIC_MODEL`.
+Адрес API можно сменить через `ANTHROPIC_BASE_URL` (прокси, совместимый шлюз).
 
 ## Архитектура
 

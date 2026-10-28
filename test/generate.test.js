@@ -69,6 +69,19 @@ test('generateGame возвращает валидный HTML из ответа 
   assert.match(sent.body.messages[0].content, /змейка/);
 });
 
+test('generateGame повторяет запрос, если первый ответ невалиден', async () => {
+  const replies = ['```html\n<p>нет игры</p>\n```', `\`\`\`html\n${GAME}\n\`\`\``];
+  let calls = 0;
+  const fakeFetch = async () => ({
+    ok: true,
+    json: async () => ({ content: [{ type: 'text', text: replies[calls++] }] }),
+  });
+
+  const html = await generateGame({ prompt: 'x' }, { apiKey: 'k', model: 'm', fetchImpl: fakeFetch });
+  assert.equal(html, GAME);
+  assert.equal(calls, 2);
+});
+
 test('generateGame отклоняет невалидный ответ', async () => {
   const fakeFetch = async () => ({
     ok: true,
