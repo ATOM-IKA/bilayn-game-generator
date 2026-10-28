@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "e2e": "node test/e2e/run.js",
+    "demo:llm": "node demo/fake-llm.js",
+    "demo:record": "node demo/record.js",
     "test": "node --test test/*.test.js"
   },
   "devDependencies": {
