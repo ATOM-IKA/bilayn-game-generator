@@ -6,6 +6,8 @@ const { generateGame, AUDIENCES } = require('./lib/generate');
 const PORT = Number(process.env.PORT) || 3000;
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 const DIST_DIR = path.join(__dirname, 'dist');
+const MAX_TOKENS = Number(process.env.MAX_TOKENS) || undefined;
+const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS) || undefined;
 const MAX_BODY = 64 * 1024;
 
 const MIME = {
@@ -68,7 +70,7 @@ async function handleGenerate(req, res) {
   try {
     const html = await generateGame(
       { prompt, audience, previous, change },
-      { apiKey: process.env.ANTHROPIC_API_KEY, model: MODEL, baseUrl: process.env.ANTHROPIC_BASE_URL || undefined },
+      { apiKey: process.env.ANTHROPIC_API_KEY, model: MODEL, baseUrl: process.env.ANTHROPIC_BASE_URL || undefined, maxTokens: MAX_TOKENS, maxAttempts: MAX_ATTEMPTS },
     );
     return send(res, 200, { html });
   } catch (err) {

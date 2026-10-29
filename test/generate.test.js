@@ -92,3 +92,19 @@ test('generateGame отклоняет невалидный ответ', async ()
     /INVALID_GAME/,
   );
 });
+
+test('generateGame передаёт maxTokens и не повторяет запрос при maxAttempts=1', async () => {
+  let calls = 0;
+  let sentMax;
+  const fakeFetch = async (url, init) => {
+    calls++;
+    sentMax = JSON.parse(init.body).max_tokens;
+    return { ok: true, json: async () => ({ content: [{ type: 'text', text: '```html\n<p>нет игры</p>\n```' }] }) };
+  };
+  await assert.rejects(
+    generateGame({ prompt: 'x' }, { apiKey: 'k', model: 'm', fetchImpl: fakeFetch, maxTokens: 8000, maxAttempts: 1 }),
+    /INVALID_GAME/,
+  );
+  assert.equal(calls, 1);
+  assert.equal(sentMax, 8000);
+});
