@@ -3,21 +3,27 @@
   "version": "0.1.0",
   "description": "Генератор браузерных HTML5-игр по текстовому промпту (кейс Билайна)",
   "main": "server.js",
-  "directories": {
-    "lib": "lib"
-  },
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js",
-    "e2e": "node test/e2e/run.js",
+    "start": "vite build && node --env-file-if-exists=.env server.js",
+    "server": "node --env-file-if-exists=.env server.js",
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node --test test/*.test.js",
+    "e2e": "npm run build && node test/e2e/run.js",
     "demo:llm": "node demo/fake-llm.js",
-    "demo:record": "node demo/record.js",
-    "test": "node --test test/*.test.js"
+    "demo:record": "npm run build && node demo/record.js"
   },
   "devDependencies": {
-    "playwright": "^1.56.1"
+    "@vitejs/plugin-react": "^6.1.2",
+    "playwright": "^1.56.1",
+    "vite": "^8.3.5"
   },
   "private": true,
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }

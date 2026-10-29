@@ -23,7 +23,7 @@ function reset(){snake=[{x:3,y:3}];dir={x:1,y:0};score=0;food=FOOD[0];document.g
 function draw(){x.fillStyle='#1fa85a';x.fillRect(0,0,360,360);x.fillStyle='#ff4d4d';x.beginPath();x.arc(food[0]*S+10,food[1]*S+10,9,0,7);x.fill();x.fillStyle='#fff';snake.forEach(s=>x.fillRect(s.x*S+1,s.y*S+1,S-2,S-2))}
 function end(win){clearInterval(timer);document.getElementById('msg').textContent=win?'Победа! Вы собрали все яблоки':'Игра окончена';document.getElementById('start').textContent='Играть снова';document.getElementById('ui').style.display='block'}
 function tick(){const h={x:snake[0].x+dir.x,y:snake[0].y+dir.y};if(h.x<0||h.y<0||h.x>=N||h.y>=N||snake.some(s=>s.x==h.x&&s.y==h.y))return end(false);snake.unshift(h);if(h.x==food[0]&&h.y==food[1]){score++;document.getElementById('msg').textContent='Счёт: '+score+' из 5';if(score>=5){draw();return end(true)}food=FOOD[score]}else snake.pop();draw()}
-document.getElementById('start').onclick=()=>{reset();document.getElementById('ui').style.display='none';draw();timer=setInterval(tick,${big ? 260 : 170})};
+document.getElementById('start').onclick=()=>{reset();document.getElementById('ui').style.display='none';draw();timer=setInterval(tick,${big ? 400 : 320})};
 addEventListener('keydown',e=>{const m={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[e.key];if(m)dir={x:m[0],y:m[1]}});
 document.querySelectorAll('#pad button').forEach(b=>b.onclick=()=>{const [a,d]=b.dataset.d.split(',').map(Number);dir={x:a,y:d}});
 </script></body></html>`;

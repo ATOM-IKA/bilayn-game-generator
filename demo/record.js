@@ -43,11 +43,11 @@ async function playToWin(frame, page) {
   await page.click('#prompt');
   await page.keyboard.type('замути змейку для бабушки', { delay: 90 });
   await page.waitForTimeout(500);
-  await page.selectOption('#audience', 'seniors');
+  await page.click('[data-audience="seniors"]');
   await page.waitForTimeout(800);
   await page.click('#generate');
 
-  await page.waitForSelector('#result:not([hidden])', { timeout: 30000 });
+  await page.waitForSelector('#game', { timeout: 30000 });
   await page.waitForTimeout(1500);
   await playToWin(frame, page);
   await page.waitForTimeout(1500);

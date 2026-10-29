@@ -36,9 +36,9 @@ const listen = (server) => new Promise((resolve) => server.listen(0, () => resol
 
   await page.goto(`http://localhost:${appPort}/`);
   await page.fill('#prompt', 'замути змейку для бабушки');
-  await page.selectOption('#audience', 'seniors');
+  await page.click('[data-audience="seniors"]');
   await page.click('#generate');
-  await page.waitForSelector('#result:not([hidden])', { timeout: 15000 });
+  await page.waitForSelector('#game', { timeout: 15000 });
 
   const frame = page.frameLocator('#game');
   await page.waitForTimeout(500); // ждём выполнения скрипта игры в iframe

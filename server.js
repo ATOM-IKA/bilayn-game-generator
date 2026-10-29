@@ -5,13 +5,18 @@ const { generateGame, AUDIENCES } = require('./lib/generate');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const DIST_DIR = path.join(__dirname, 'dist');
 const MAX_BODY = 64 * 1024;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json; charset=utf-8',
+  '.woff2': 'font/woff2',
 };
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
@@ -73,21 +78,24 @@ async function handleGenerate(req, res) {
   }
 }
 
-function serveStatic(req, res) {
-  const urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  const filePath = path.normalize(path.join(PUBLIC_DIR, urlPath));
-  if (!filePath.startsWith(PUBLIC_DIR)) return send(res, 403, 'Forbidden', 'text/plain');
+function serveStatic(req, res, publicDir) {
+  const urlPath = decodeURIComponent(req.url.split('?')[0]);
+  const filePath = path.normalize(path.join(publicDir, urlPath === '/' ? '/index.html' : urlPath));
+  if (!filePath.startsWith(publicDir + path.sep)) return send(res, 403, 'Forbidden', 'text/plain');
 
   fs.readFile(filePath, (err, data) => {
-    if (err) return send(res, 404, 'Not found', 'text/plain');
+    if (err) {
+      const hint = 'Фронтенд не собран. Выполните npm run build (или запустите npm start).';
+      return send(res, 404, urlPath === '/' ? hint : 'Not found', 'text/plain; charset=utf-8');
+    }
     send(res, 200, data, MIME[path.extname(filePath)] || 'application/octet-stream');
   });
 }
 
-function createServer() {
+function createServer({ publicDir = DIST_DIR } = {}) {
   return http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/api/generate') return handleGenerate(req, res);
-    if (req.method === 'GET') return serveStatic(req, res);
+    if (req.method === 'GET') return serveStatic(req, res, publicDir);
     send(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   });
 }

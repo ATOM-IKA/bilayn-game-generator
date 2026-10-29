@@ -1,13 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { createServer } = require('../server');
+
+const PUBLIC = fs.mkdtempSync(path.join(os.tmpdir(), 'gf-'));
+fs.writeFileSync(path.join(PUBLIC, 'index.html'), '<div id="root">Игра по одному предложению</div>');
 
 function listen(server) {
   return new Promise((resolve) => server.listen(0, () => resolve(`http://localhost:${server.address().port}`)));
 }
 
 async function withServer(fn) {
-  const server = createServer();
+  const server = createServer({ publicDir: PUBLIC });
   const base = await listen(server);
   try {
     await fn(base);

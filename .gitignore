@@ -2,3 +2,4 @@ node_modules/
 *.log
 .env
 demo/out/
+dist/
