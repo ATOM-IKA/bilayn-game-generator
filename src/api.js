@@ -8,6 +8,10 @@ const ERRORS = {
   LLM_HTTP_403: 'Доступ запрещён. Проверьте ключ и права на выбранную модель.',
   LLM_HTTP_404: 'Модель не найдена или недоступна для вашего ключа. Проверьте OPENAI_MODEL в .env.',
   LLM_HTTP_429: 'Лимит запросов или недостаточно средств на счёте OpenAI. Проверьте баланс и повторите.',
+  LLM_NETWORK: 'Нет связи с сервером модели. Проверьте интернет и адрес LLM_BASE_URL, затем повторите.',
+  LLM_TIMEOUT: 'Модель отвечала слишком долго. Повторите или включите QUALITY=standard в .env.',
+  LLM_STREAM_ERROR: 'Шлюз вернул внутреннюю ошибку посреди ответа (даже после повторов). Попробуйте ещё раз позже.',
+  LLM_STREAM_INTERRUPTED: 'Соединение со шлюзом оборвалось. Повторите попытку.',
   RESPONSE_TRUNCATED: 'Игра получилась слишком большой. Увеличьте MAX_TOKENS в .env или упростите запрос.',
 };
 
@@ -29,7 +33,10 @@ export async function requestGame(body) {
 
   const data = await readJson(response);
   if (!response.ok) {
-    const error = new Error(ERRORS[data.error] || 'Не удалось создать игру. Попробуйте ещё раз.');
+    const gatewayDown = /^LLM_HTTP_5\d\d$/.test(data.error || '');
+    const known = ERRORS[data.error] || (gatewayDown ? 'Шлюз модели временно недоступен или не дождался ответа. Повторите попытку.' : '');
+    const code = data.error ? ` Код ошибки: ${data.error}.` : '';
+    const error = new Error(known || `Не удалось создать игру.${code} Подробности в консоли сервера.`);
     error.usage = data.usage;
     throw error;
   }

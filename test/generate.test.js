@@ -332,3 +332,112 @@ test('apiUrl учитывает слэш в конце и уже указанн�
   assert.equal(apiUrl('https://gw.example', '/chat/completions'), 'https://gw.example/v1/chat/completions');
   assert.equal(apiUrl('https://gw.example/v1/', '/chat/completions'), 'https://gw.example/v1/chat/completions');
 });
+
+function sse(parts, { finish = 'stop', usage = { prompt_tokens: 5, completion_tokens: 15, total_tokens: 20 } } = {}) {
+  const events = parts.map((text) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+  if (finish) events.push(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finish }] })}\n\n`);
+  if (usage) events.push(`data: ${JSON.stringify({ choices: [], usage })}\n\n`, 'data: [DONE]\n\n');
+  const bytes = new TextEncoder().encode(events.join(''));
+  // режем поток на куски по 7 байт, чтобы проверить сборку строк, разорванных между кусками
+  const chunks = [];
+  for (let i = 0; i < bytes.length; i += 7) chunks.push(bytes.slice(i, i + 7));
+  const body = new ReadableStream({
+    start(controller) {
+      chunks.forEach((c) => controller.enqueue(c));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+}
+
+const GAME_REPLY = ['```html\n', GAME, '\n```'];
+const openAi = { provider: 'openai', apiKey: 'k', retryDelaysMs: [0, 0, 0] };
+
+test('потоковый ответ OpenAI собирается в игру и учитывает токены', async () => {
+  let body;
+  const fetchImpl = async (url, init) => {
+    body = JSON.parse(init.body);
+    return sse(GAME_REPLY);
+  };
+  const budget = createBudget({ limit: 0, file: path.join(os.tmpdir(), `gf-s-${Date.now()}.json`) });
+  const html = await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, budget });
+  assert.equal(html, GAME);
+  assert.equal(body.stream, true);
+  assert.deepEqual(body.stream_options, { include_usage: true });
+  assert.equal(budget.used, 20);
+});
+
+test('оборванный поток повторяется и затем успешно завершается', async () => {
+  let calls = 0;
+  const fetchImpl = async () => (++calls === 1 ? sse(['```html\n<canv'], { finish: null, usage: null }) : sse(GAME_REPLY));
+  assert.equal(await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), GAME);
+  assert.equal(calls, 2);
+});
+
+test('временный сбой шлюза 502 повторяется', async () => {
+  let calls = 0;
+  const fetchImpl = async () => (++calls < 3 ? new Response('Bad gateway', { status: 502 }) : sse(GAME_REPLY));
+  assert.equal(await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), GAME);
+  assert.equal(calls, 3);
+});
+
+test('постоянный сбой 524 заканчивается ошибкой LLM_HTTP_524 после повторов', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response('timeout', { status: 524 });
+  };
+  await assert.rejects(generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), (err) => err.message === 'LLM_HTTP_524');
+  assert.equal(calls, 4);
+});
+
+test('сетевая ошибка повторяется, а затем превращается в LLM_NETWORK', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    throw new TypeError('fetch failed', { cause: { message: 'ECONNRESET' } });
+  };
+  await assert.rejects(
+    generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }),
+    (err) => err.message === 'LLM_NETWORK' && err.detail === 'ECONNRESET',
+  );
+  assert.equal(calls, 4);
+});
+
+test('401 не повторяется', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response('bad key', { status: 401 });
+  };
+  await assert.rejects(generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), /LLM_HTTP_401/);
+  assert.equal(calls, 1);
+});
+
+test('если шлюз не принимает stream, запрос повторяется без потока', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.stream) return new Response("Unknown parameter: 'stream_options'", { status: 400 });
+    return new Response(JSON.stringify({ choices: [{ message: { content: GAME_REPLY.join('') }, finish_reason: 'stop' }], usage: { total_tokens: 3 } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  assert.equal(await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), GAME);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].stream, undefined);
+});
+
+test('внутренняя ошибка шлюза посреди потока повторяется', async () => {
+  const errorStream = () =>
+    new Response(`data: ${JSON.stringify({ error: { code: 'server_error', message: 'could not complete' } })}\n\n`, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  let calls = 0;
+  const fetchImpl = async () => (++calls < 3 ? errorStream() : sse(GAME_REPLY));
+  assert.equal(await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), GAME);
+  assert.equal(calls, 3);
+});
