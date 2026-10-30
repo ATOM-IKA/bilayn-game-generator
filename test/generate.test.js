@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { buildUserMessage, extractHtml, validateGame, generateGame } = require('../lib/generate');
 const { createBudget } = require('../lib/budget');
+const { apiUrl } = require('../lib/providers');
 
 const GAME =
   '<!doctype html><html><body><canvas></canvas><script>addEventListener("keydown", () => {}); requestAnimationFrame(() => {});</script></body></html>';
@@ -324,4 +325,10 @@ test('если API отклонил слишком большой max_completion
   };
   await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', fetchImpl: fakeFetch, model: 'gpt-6.1-sol' });
   assert.deepEqual(sizes, [128000, 32000]);
+});
+
+test('apiUrl учитывает слэш в конце и уже указанный /v1', () => {
+  assert.equal(apiUrl('https://gw.example/', '/chat/completions'), 'https://gw.example/v1/chat/completions');
+  assert.equal(apiUrl('https://gw.example', '/chat/completions'), 'https://gw.example/v1/chat/completions');
+  assert.equal(apiUrl('https://gw.example/v1/', '/chat/completions'), 'https://gw.example/v1/chat/completions');
 });

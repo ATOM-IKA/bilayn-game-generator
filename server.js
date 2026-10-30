@@ -24,7 +24,9 @@ const MIME = {
 // Настройки читаются из окружения при каждом обращении, поэтому тесты могут менять их на лету.
 function getConfig() {
   const env = process.env;
-  const provider = env.LLM_PROVIDER || (env.OPENAI_API_KEY ? 'openai' : 'anthropic');
+  const hasAnthropicKey = env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN;
+  const hasOpenAiKey = env.OPENAI_API_KEY || env.LLM_API_KEY;
+  const provider = env.LLM_PROVIDER || (hasAnthropicKey && !hasOpenAiKey ? 'anthropic' : 'openai');
   const isOpenAi = provider === 'openai';
   const adapter = PROVIDERS[provider];
   const model = (isOpenAi ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL) || adapter?.defaultModel;
@@ -32,9 +34,10 @@ function getConfig() {
   return {
     provider,
     model,
-    apiKey: isOpenAi ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY,
+    // LLM_API_KEY и LLM_BASE_URL: общие имена для любого провайдера или шлюза
+    apiKey: (isOpenAi ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY) || env.LLM_API_KEY,
     authToken: isOpenAi ? undefined : env.ANTHROPIC_AUTH_TOKEN,
-    baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || undefined,
+    baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || env.LLM_BASE_URL || undefined,
     // максимальное рассуждение по умолчанию для моделей, которые его поддерживают
     reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (isReasoningModel(model) ? 'high' : undefined) : undefined,
     quality: env.QUALITY === 'standard' ? 'standard' : 'max',

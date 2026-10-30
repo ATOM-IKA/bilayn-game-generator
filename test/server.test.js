@@ -107,3 +107,41 @@ test('при исчерпанном бюджете генерация возвр
     process.env = saved;
   }
 });
+
+test('имена LLM_API_KEY и LLM_BASE_URL из .env работают как OPENAI_*', async () => {
+  const http = require('node:http');
+  const game = '<canvas></canvas><script>addEventListener("click", () => {}); requestAnimationFrame(() => {});</script>';
+  let received;
+  const gateway = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      received = { url: req.url, auth: req.headers.authorization, model: JSON.parse(raw).model };
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { content: `\`\`\`html\n${game}\n\`\`\`` }, finish_reason: 'stop' }], usage: { total_tokens: 7 } }));
+    });
+  });
+  await new Promise((r) => gateway.listen(0, r));
+
+  const saved = { ...process.env };
+  for (const name of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']) delete process.env[name];
+  Object.assign(process.env, {
+    LLM_PROVIDER: 'openai',
+    LLM_API_KEY: 'gw-key',
+    LLM_BASE_URL: `http://localhost:${gateway.address().port}/`,
+    OPENAI_MODEL: 'gpt-5.6-sol',
+    QUALITY: 'standard',
+    BUDGET_FILE: path.join(os.tmpdir(), `gf-gw-${Date.now()}.json`),
+  });
+  try {
+    await withServer(async (base) => {
+      const res = await post(base, { prompt: 'змейка' });
+      assert.equal(res.status, 200);
+      assert.equal((await res.json()).html, game);
+    });
+    assert.deepEqual(received, { url: '/v1/chat/completions', auth: 'Bearer gw-key', model: 'gpt-5.6-sol' });
+  } finally {
+    process.env = saved;
+    gateway.close();
+  }
+});
