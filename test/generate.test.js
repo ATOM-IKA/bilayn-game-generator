@@ -441,3 +441,51 @@ test('внутренняя ошибка шлюза посреди потока �
   assert.equal(await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl }), GAME);
   assert.equal(calls, 3);
 });
+
+test('зависший поток обрывается по таймауту молчания и запрос повторяется', async () => {
+  let calls = 0;
+  const hanging = () => new Response(new ReadableStream({ start() {} }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  const fetchImpl = async () => (++calls === 1 ? hanging() : sse(GAME_REPLY));
+  const logs = [];
+  const html = await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, stallMs: 30, log: (m) => logs.push(m) });
+  assert.equal(html, GAME);
+  assert.equal(calls, 2);
+  assert.ok(logs.some((m) => m.includes('повтор')));
+  assert.ok(logs.some((m) => m.startsWith('←') && m.includes('токенов')));
+});
+
+test('режим max: дизайн и ревью идут с низким рассуждением, код с заданным', async () => {
+  const efforts = [];
+  const replies = ['план', fence(GAME), fence(GAME)];
+  let i = 0;
+  const fetchImpl = async (url, init) => {
+    efforts.push(JSON.parse(init.body).reasoning_effort);
+    return sse([replies[i++]]);
+  };
+  await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, quality: 'max', reasoningEffort: 'high' });
+  assert.deepEqual(efforts, ['low', 'high', 'low']);
+});
+
+test('общий лимит времени: зависший код игры даёт GENERATION_TIMEOUT', async () => {
+  const hanging = () => new Response(new ReadableStream({ start() {} }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  const started = Date.now();
+  await assert.rejects(
+    generateGame({ prompt: 'x' }, { ...openAi, fetchImpl: async () => hanging(), timeLimitMs: 300, stallMs: 5000 }),
+    (err) => err.message === 'GENERATION_TIMEOUT',
+  );
+  assert.ok(Date.now() - started < 2000);
+});
+
+test('общий лимит времени: если на ревью времени не хватает, возвращается готовая игра', async () => {
+  const logs = [];
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return sse([calls === 1 ? 'план' : fence(GAME)]);
+  };
+  // срок 30 секунд меньше минимального запаса на ревью (60 секунд), поэтому ревью пропускается
+  const html = await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, quality: 'max', timeLimitMs: 30000, log: (m) => logs.push(m) });
+  assert.equal(html, GAME);
+  assert.equal(calls, 2);
+  assert.ok(logs.some((m) => m.includes('ревью пропущено')));
+});

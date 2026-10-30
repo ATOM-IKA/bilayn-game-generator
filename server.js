@@ -38,8 +38,10 @@ function getConfig() {
     apiKey: (isOpenAi ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY) || env.LLM_API_KEY,
     authToken: isOpenAi ? undefined : env.ANTHROPIC_AUTH_TOKEN,
     baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || env.LLM_BASE_URL || undefined,
-    // максимальное рассуждение по умолчанию для моделей, которые его поддерживают
-    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (isReasoningModel(model) ? 'high' : undefined) : undefined,
+    // среднее рассуждение по умолчанию: high на этом шлюзе не укладывается в 5 минут
+    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (isReasoningModel(model) ? 'medium' : undefined) : undefined,
+    stallMs: Number(env.LLM_STALL_TIMEOUT_MS) || undefined,
+    timeLimitMs: Number(env.GENERATION_TIMEOUT_MS) || undefined,
     quality: env.QUALITY === 'standard' ? 'standard' : 'max',
     maxTokens: Number(env.MAX_TOKENS) || undefined,
     maxAttempts: Number(env.MAX_ATTEMPTS) || undefined,
@@ -79,6 +81,8 @@ function readJson(req) {
   });
 }
 
+const log = (message) => console.log(`${new Date().toLocaleTimeString('ru-RU')} ${message}`);
+
 function usageInfo(config, budget) {
   return { provider: config.provider, model: config.model, ...budget.snapshot() };
 }
@@ -101,7 +105,7 @@ async function handleGenerate(req, res, budget) {
 
   const config = getConfig();
   try {
-    const html = await generateGame({ prompt, audience, previous, change }, { ...config, budget });
+    const html = await generateGame({ prompt, audience, previous, change }, { ...config, budget, log });
     return send(res, 200, { html, usage: usageInfo(config, budget) });
   } catch (err) {
     console.error('generate failed:', err.message, err.detail || '');
