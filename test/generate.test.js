@@ -253,3 +253,49 @@ test('максимум ответа: 128000 для gpt-5 и 16000 для ост�
   }
   assert.deepEqual(sizes, { 'gpt-5': 128000, 'gpt-4.1': 16000 });
 });
+
+function scripted(replies) {
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    seen.push(body);
+    const text = replies[seen.length - 1];
+    return { ok: true, json: async () => ({ choices: [{ message: { content: text }, finish_reason: 'stop' }], usage: { total_tokens: 100 } }) };
+  };
+  return { fetchImpl, seen };
+}
+
+const fence = (html) => `\`\`\`html\n${html}\n\`\`\``;
+
+test('режим max: дизайн-документ, код по нему, затем ревью с улучшенной версией', async () => {
+  const improved = GAME.replace('<canvas>', '<canvas id="improved">');
+  const { fetchImpl, seen } = scripted(['ДИЗАЙН: змейка с яблоками', fence(GAME), fence(improved)]);
+
+  const html = await generateGame({ prompt: 'змейка' }, { provider: 'openai', apiKey: 'k', quality: 'max', fetchImpl });
+
+  assert.equal(html, improved);
+  assert.equal(seen.length, 3);
+  const userText = (body, i) => body.messages.filter((m) => m.role === 'user')[i].content;
+  assert.match(userText(seen[0], 0), /дизайн-документ/);
+  assert.match(userText(seen[1], 0), /ДИЗАЙН: змейка с яблоками/);
+  assert.match(userText(seen[2], 1), /строгое ревью/);
+});
+
+test('режим max: если ревью сломало игру, остаётся рабочая версия', async () => {
+  const { fetchImpl } = scripted(['план', fence(GAME), fence('<p>сломано</p>')]);
+  const html = await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', quality: 'max', fetchImpl });
+  assert.equal(html, GAME);
+});
+
+test('режим max: при доработке дизайн-документ не запрашивается', async () => {
+  const { fetchImpl, seen } = scripted([fence(GAME), fence(GAME)]);
+  await generateGame({ previous: GAME, change: 'кнопки больше' }, { provider: 'openai', apiKey: 'k', quality: 'max', fetchImpl });
+  assert.equal(seen.length, 2);
+  assert.match(seen[0].messages.find((m) => m.role === 'user').content, /кнопки больше/);
+});
+
+test('режим standard делает один запрос', async () => {
+  const { fetchImpl, seen } = scripted([fence(GAME)]);
+  await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', quality: 'standard', fetchImpl });
+  assert.equal(seen.length, 1);
+});

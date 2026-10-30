@@ -353,6 +353,7 @@ input[type="text"]:focus {
   animation: spin 0.9s linear infinite;
 }
 
+.loader__hint { margin: -8px 24px 0; text-align: center; font-size: 13px; color: var(--muted); }
 .loader ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .loader li { color: #5f6275; font-size: 15px; padding-left: 26px; position: relative; }
 .loader li::before { content: ""; position: absolute; left: 0; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: currentColor; }

@@ -28,6 +28,7 @@ const listen = (server) => new Promise((resolve) => server.listen(0, () => resol
 
 (async () => {
   const llmPort = await listen(fakeLlm);
+  process.env.QUALITY = 'standard';
   process.env.LLM_PROVIDER = 'openai';
   process.env.OPENAI_API_KEY = 'test-key';
   process.env.OPENAI_BASE_URL = `http://localhost:${llmPort}`;

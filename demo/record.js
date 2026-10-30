@@ -27,6 +27,7 @@ async function playToWin(frame, page) {
   fs.mkdirSync(OUT, { recursive: true });
 
   const llm = await startFakeLlm(0, 6000, (m) => console.log(m));
+  process.env.QUALITY = 'standard';
   process.env.ANTHROPIC_API_KEY = 'simulated-key';
   process.env.ANTHROPIC_BASE_URL = `http://localhost:${llm.address().port}`;
   const app = createServer();

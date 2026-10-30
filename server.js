@@ -27,14 +27,17 @@ function getConfig() {
   const provider = env.LLM_PROVIDER || (env.OPENAI_API_KEY ? 'openai' : 'anthropic');
   const isOpenAi = provider === 'openai';
   const adapter = PROVIDERS[provider];
+  const model = (isOpenAi ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL) || adapter?.defaultModel;
 
   return {
     provider,
-    model: (isOpenAi ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL) || adapter?.defaultModel,
+    model,
     apiKey: isOpenAi ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY,
     authToken: isOpenAi ? undefined : env.ANTHROPIC_AUTH_TOKEN,
     baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || undefined,
-    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || undefined : undefined,
+    // максимальное рассуждение по умолчанию для моделей, которые его поддерживают
+    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (/^(gpt-5|o\d)/.test(model) ? 'high' : undefined) : undefined,
+    quality: env.QUALITY === 'standard' ? 'standard' : 'max',
     maxTokens: Number(env.MAX_TOKENS) || undefined,
     maxAttempts: Number(env.MAX_ATTEMPTS) || undefined,
     generationLimit: Number(env.GENERATION_TOKEN_LIMIT) || DEFAULT_GENERATION_TOKEN_LIMIT,
@@ -135,7 +138,7 @@ if (require.main === module) {
   const config = getConfig();
   createServer().listen(PORT, () => {
     console.log(`Game generator: http://localhost:${PORT}`);
-    console.log(`Провайдер: ${config.provider}, модель: ${config.model}, потолок на одну генерацию: ${config.generationLimit.toLocaleString('ru-RU')} токенов`);
+    console.log(`Провайдер: ${config.provider}, модель: ${config.model}, потолок на одну генерацию: ${config.generationLimit.toLocaleString('ru-RU')} токенов, качество: ${config.quality}, рассуждение: ${config.reasoningEffort || 'по умолчанию'}`);
     if (!config.apiKey && !config.authToken) {
       const name = config.provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
       console.log(`Внимание: не задан ${name} в файле .env, генерация вернёт ошибку 503.`);
