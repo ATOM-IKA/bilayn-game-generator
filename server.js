@@ -2,13 +2,13 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { generateGame, AUDIENCES } = require('./lib/generate');
+const { PROVIDERS } = require('./lib/providers');
+const { createBudget } = require('./lib/budget');
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 const DIST_DIR = path.join(__dirname, 'dist');
-const MAX_TOKENS = Number(process.env.MAX_TOKENS) || undefined;
-const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS) || undefined;
 const MAX_BODY = 64 * 1024;
+const DEFAULT_TOKEN_BUDGET = 5_000_000;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -20,6 +20,27 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.woff2': 'font/woff2',
 };
+
+// Настройки читаются из окружения при каждом обращении, поэтому тесты могут менять их на лету.
+function getConfig() {
+  const env = process.env;
+  const provider = env.LLM_PROVIDER || (env.OPENAI_API_KEY ? 'openai' : 'anthropic');
+  const isOpenAi = provider === 'openai';
+  const adapter = PROVIDERS[provider];
+
+  return {
+    provider,
+    model: (isOpenAi ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL) || adapter?.defaultModel,
+    apiKey: isOpenAi ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY,
+    authToken: isOpenAi ? undefined : env.ANTHROPIC_AUTH_TOKEN,
+    baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || undefined,
+    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || undefined : undefined,
+    maxTokens: Number(env.MAX_TOKENS) || undefined,
+    maxAttempts: Number(env.MAX_ATTEMPTS) || undefined,
+    tokenBudget: Number(env.TOKEN_BUDGET) || DEFAULT_TOKEN_BUDGET,
+    budgetFile: env.BUDGET_FILE || path.join(__dirname, '.usage.json'),
+  };
+}
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.writeHead(status, { 'content-type': type });
@@ -51,7 +72,11 @@ function readJson(req) {
   });
 }
 
-async function handleGenerate(req, res) {
+function usageInfo(config, budget) {
+  return { provider: config.provider, model: config.model, ...budget.snapshot() };
+}
+
+async function handleGenerate(req, res, budget) {
   let body;
   try {
     body = await readJson(req);
@@ -67,16 +92,15 @@ async function handleGenerate(req, res) {
   if (!change && !prompt) return send(res, 400, { error: 'EMPTY_PROMPT' });
   if (change && !previous) return send(res, 400, { error: 'NO_PREVIOUS_GAME' });
 
+  const config = getConfig();
   try {
-    const html = await generateGame(
-      { prompt, audience, previous, change },
-      { apiKey: process.env.ANTHROPIC_API_KEY, authToken: process.env.ANTHROPIC_AUTH_TOKEN, model: MODEL, baseUrl: process.env.ANTHROPIC_BASE_URL || undefined, maxTokens: MAX_TOKENS, maxAttempts: MAX_ATTEMPTS },
-    );
-    return send(res, 200, { html });
+    const html = await generateGame({ prompt, audience, previous, change }, { ...config, budget });
+    return send(res, 200, { html, usage: usageInfo(config, budget) });
   } catch (err) {
-    console.error('generate failed:', err.message);
+    console.error('generate failed:', err.message, err.detail || '');
     if (err.message === 'NO_API_KEY') return send(res, 503, { error: 'NO_API_KEY' });
-    return send(res, 502, { error: err.message });
+    if (err.message === 'TOKEN_BUDGET_EXCEEDED') return send(res, 429, { error: err.message, usage: usageInfo(config, budget) });
+    return send(res, 502, { error: err.message, usage: usageInfo(config, budget) });
   }
 }
 
@@ -95,18 +119,25 @@ function serveStatic(req, res, publicDir) {
 }
 
 function createServer({ publicDir = DIST_DIR } = {}) {
+  const initial = getConfig();
+  const budget = createBudget({ limit: initial.tokenBudget, file: initial.budgetFile });
+
   return http.createServer((req, res) => {
-    if (req.method === 'POST' && req.url === '/api/generate') return handleGenerate(req, res);
+    if (req.method === 'POST' && req.url === '/api/generate') return handleGenerate(req, res, budget);
+    if (req.method === 'GET' && req.url === '/api/usage') return send(res, 200, usageInfo(getConfig(), budget));
     if (req.method === 'GET') return serveStatic(req, res, publicDir);
     send(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   });
 }
 
 if (require.main === module) {
+  const config = getConfig();
   createServer().listen(PORT, () => {
-    console.log(`Game generator: http://localhost:${PORT}  (model: ${MODEL})`);
-    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-      console.log('Внимание: не задан ANTHROPIC_API_KEY (или ANTHROPIC_AUTH_TOKEN), генерация вернёт ошибку 503.');
+    console.log(`Game generator: http://localhost:${PORT}`);
+    console.log(`Провайдер: ${config.provider}, модель: ${config.model}, лимит токенов: ${config.tokenBudget.toLocaleString('ru-RU')}`);
+    if (!config.apiKey && !config.authToken) {
+      const name = config.provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
+      console.log(`Внимание: не задан ${name} в файле .env, генерация вернёт ошибку 503.`);
     }
   });
 }

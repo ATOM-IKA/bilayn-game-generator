@@ -14,18 +14,24 @@ const fakeLlm = http.createServer((req, res) => {
   let raw = '';
   req.on('data', (chunk) => (raw += chunk));
   req.on('end', () => {
-    received.push({ ...JSON.parse(raw), apiKey: req.headers['x-api-key'] });
+    received.push({ ...JSON.parse(raw), auth: req.headers.authorization, url: req.url });
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: `\`\`\`html\n${GAME}\n\`\`\`` }] }));
+    res.end(JSON.stringify({
+      choices: [{ message: { content: `\`\`\`html\n${GAME}\n\`\`\`` }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 100, completion_tokens: 900, total_tokens: 1000 },
+    }));
   });
 });
 
+const userText = (r) => r.messages.find((m) => m.role === 'user').content;
 const listen = (server) => new Promise((resolve) => server.listen(0, () => resolve(server.address().port)));
 
 (async () => {
   const llmPort = await listen(fakeLlm);
-  process.env.ANTHROPIC_API_KEY = 'test-key';
-  process.env.ANTHROPIC_BASE_URL = `http://localhost:${llmPort}`;
+  process.env.LLM_PROVIDER = 'openai';
+  process.env.OPENAI_API_KEY = 'test-key';
+  process.env.OPENAI_BASE_URL = `http://localhost:${llmPort}`;
+  process.env.BUDGET_FILE = path.join(require('node:os').tmpdir(), `gf-e2e-${Date.now()}.json`);
   const app = createServer();
   const appPort = await listen(app);
 
@@ -56,15 +62,17 @@ const listen = (server) => new Promise((resolve) => server.listen(0, () => resol
   await page.click('#iterate');
   await page.waitForFunction(() => document.getElementById('status').textContent === 'Игра обновлена.');
 
+  const badge = (await page.textContent('#usage')).replace(/\s+/g, ' ');
   await browser.close();
   app.close();
   fakeLlm.close();
 
   const checks = [
-    ['запрос ушёл в LLM с промптом и аудиторией', /змейку/.test(received[0].messages[0].content) && /пожилые/.test(received[0].messages[0].content)],
-    ['ключ передан в LLM', received[0].apiKey === 'test-key'],
+    ['запрос ушёл в LLM с промптом и аудиторией', /змейку/.test(userText(received[0])) && /пожилые/.test(userText(received[0]))],
+    ['запрос ушёл по пути OpenAI с ключом', received[0].url === '/v1/chat/completions' && received[0].auth === 'Bearer test-key'],
+    ['счётчик токенов показан в шапке', /2 000 \/ 5 000 000/.test(badge)],
     ['игра отрисовала несколько цветов на canvas', painted[0] >= 3],
-    ['доработка отправила текущую игру и правку', received.length === 2 && /кнопки больше/.test(received[1].messages[0].content)],
+    ['доработка отправила текущую игру и правку', received.length === 2 && /кнопки больше/.test(userText(received[1]))],
     ['нет JS-ошибок на странице', errors.length === 0],
   ];
   checks.forEach(([name, ok]) => console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}`));

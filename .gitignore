@@ -3,3 +3,6 @@ node_modules/
 .env
 demo/out/
 dist/
+.usage.json
+.env.*
+!.env.example

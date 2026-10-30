@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { requestGame } from './api.js';
+import { useEffect, useState } from 'react';
+import { fetchUsage, requestGame } from './api.js';
 import { loadGames, saveGames } from './storage.js';
 import Phone from './components/Phone.jsx';
 import Gallery from './components/Gallery.jsx';
@@ -29,6 +29,11 @@ export default function App() {
   const [games, setGames] = useState(loadGames);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState({ text: '', error: false });
+  const [usage, setUsage] = useState(null);
+
+  useEffect(() => {
+    fetchUsage().then(setUsage);
+  }, []);
 
   const updateGames = (next) => setGames(saveGames(next));
 
@@ -36,8 +41,11 @@ export default function App() {
     setBusy(true);
     setStatus({ text: '', error: false });
     try {
-      onDone(await requestGame(body));
+      const data = await requestGame(body);
+      setUsage(data.usage);
+      onDone(data.html);
     } catch (err) {
+      if (err.usage) setUsage(err.usage);
       setStatus({ text: err.message, error: true });
     } finally {
       setBusy(false);
@@ -94,7 +102,11 @@ export default function App() {
           <span className="logo__mark">⚡</span>
           <span>GameForge</span>
         </div>
-        <span className="badge">AI · HTML5 · WebView</span>
+        <span className="badge" id="usage" title="Использовано токенов из общего лимита">
+          {usage
+            ? `${usage.provider === 'openai' ? 'OpenAI' : 'Claude'} · ${usage.model} · ${usage.used.toLocaleString('ru-RU')} / ${usage.limit.toLocaleString('ru-RU')} токенов`
+            : 'AI · HTML5 · WebView'}
+        </span>
       </header>
 
       <main className="layout">

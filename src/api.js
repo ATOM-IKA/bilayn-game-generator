@@ -1,11 +1,18 @@
 const ERRORS = {
-  NO_API_KEY: 'Не задан ключ API. Впишите ANTHROPIC_API_KEY в файл .env и перезапустите сервер.',
+  NO_API_KEY: 'Не задан ключ API. Впишите OPENAI_API_KEY в файл .env и перезапустите сервер.',
   EMPTY_PROMPT: 'Опишите игру одним предложением.',
   NO_PREVIOUS_GAME: 'Сначала создайте игру.',
-  LLM_HTTP_401: 'Ключ API не подошёл. Проверьте ANTHROPIC_API_KEY в файле .env.',
-  LLM_HTTP_429: 'Превышен лимит запросов к модели. Подождите минуту и повторите.',
-  RESPONSE_TRUNCATED: 'Игра получилась слишком большой. Попробуйте упростить запрос.',
+  TOKEN_BUDGET_EXCEEDED: 'Достигнут лимит токенов. Увеличьте TOKEN_BUDGET в .env или сбросьте файл .usage.json.',
+  LLM_HTTP_401: 'Ключ API не подошёл. Проверьте ключ в файле .env.',
+  LLM_HTTP_403: 'Доступ запрещён. Проверьте ключ и права на выбранную модель.',
+  LLM_HTTP_404: 'Модель не найдена или недоступна для вашего ключа. Проверьте OPENAI_MODEL в .env.',
+  LLM_HTTP_429: 'Лимит запросов или недостаточно средств на счёте OpenAI. Проверьте баланс и повторите.',
+  RESPONSE_TRUNCATED: 'Игра получилась слишком большой. Увеличьте MAX_TOKENS в .env или упростите запрос.',
 };
+
+async function readJson(response) {
+  return response.json().catch(() => ({}));
+}
 
 export async function requestGame(body) {
   let response;
@@ -19,7 +26,20 @@ export async function requestGame(body) {
     throw new Error('Сервер недоступен. Запущен ли npm start?');
   }
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(ERRORS[data.error] || 'Не удалось создать игру. Попробуйте ещё раз.');
-  return data.html;
+  const data = await readJson(response);
+  if (!response.ok) {
+    const error = new Error(ERRORS[data.error] || 'Не удалось создать игру. Попробуйте ещё раз.');
+    error.usage = data.usage;
+    throw error;
+  }
+  return data;
+}
+
+export async function fetchUsage() {
+  try {
+    const response = await fetch('/api/usage');
+    return response.ok ? await readJson(response) : null;
+  } catch {
+    return null;
+  }
 }
