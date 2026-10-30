@@ -73,7 +73,7 @@ test('без ANTHROPIC_API_KEY генерация возвращает 503', asy
   }
 });
 
-test('GET /api/usage отдаёт провайдера, модель и лимит 5 000 000 по умолчанию', async () => {
+test('GET /api/usage отдаёт провайдера, модель и расход без общего лимита', async () => {
   const saved = { ...process.env };
   delete process.env.TOKEN_BUDGET;
   process.env.LLM_PROVIDER = 'openai';
@@ -82,7 +82,7 @@ test('GET /api/usage отдаёт провайдера, модель и лими
       const data = await (await fetch(`${base}/api/usage`)).json();
       assert.equal(data.provider, 'openai');
       assert.equal(data.model, 'gpt-5');
-      assert.equal(data.limit, 5_000_000);
+      assert.equal(data.limit, 0);
       assert.equal(data.used, 0);
     });
   } finally {

@@ -70,7 +70,7 @@ const listen = (server) => new Promise((resolve) => server.listen(0, () => resol
   const checks = [
     ['запрос ушёл в LLM с промптом и аудиторией', /змейку/.test(userText(received[0])) && /пожилые/.test(userText(received[0]))],
     ['запрос ушёл по пути OpenAI с ключом', received[0].url === '/v1/chat/completions' && received[0].auth === 'Bearer test-key'],
-    ['счётчик токенов показан в шапке', /2 000 \/ 5 000 000/.test(badge)],
+    ['счётчик токенов показан в шапке', /потрачено 2 000 токенов/.test(badge)],
     ['игра отрисовала несколько цветов на canvas', painted[0] >= 3],
     ['доработка отправила текущую игру и правку', received.length === 2 && /кнопки больше/.test(userText(received[1]))],
     ['нет JS-ошибок на странице', errors.length === 0],

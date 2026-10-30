@@ -163,7 +163,7 @@ test('OpenAI: запрос идёт в chat/completions, токены учиты
   assert.equal(sent.url, 'https://api.openai.com/v1/chat/completions');
   assert.equal(sent.headers.authorization, 'Bearer sk-test');
   assert.equal(sent.body.model, 'gpt-5');
-  assert.equal(sent.body.max_completion_tokens, 32000);
+  assert.equal(sent.body.max_completion_tokens, 128000);
   assert.equal(sent.body.reasoning_effort, 'low');
   assert.equal(sent.body.messages[0].role, 'system');
   assert.match(sent.body.messages[1].content, /змейка/);
@@ -209,4 +209,47 @@ test('бюджет токенов сохраняется в файл и чита
   createBudget({ limit: 5_000_000, file }).add(1234);
   const again = createBudget({ limit: 5_000_000, file });
   assert.deepEqual(again.snapshot(), { used: 1234, limit: 5_000_000, remaining: 4_998_766 });
+  assert.equal(createBudget({ limit: 0, file }).snapshot().remaining, null);
+});
+
+test('потолок токенов считается на одну генерацию по всем попыткам', async () => {
+  let calls = 0;
+  const fakeFetch = async () => {
+    calls++;
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '```html\n<p>нет игры</p>\n```' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 60, completion_tokens: 60, total_tokens: 120 },
+      }),
+    };
+  };
+  await assert.rejects(
+    generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', fetchImpl: fakeFetch, generationLimit: 100, maxAttempts: 5 }),
+    /GENERATION_TOKEN_LIMIT_EXCEEDED/,
+  );
+  assert.equal(calls, 1);
+});
+
+test('потолок одной генерации по умолчанию 5 000 000 не мешает обычной работе', async () => {
+  const fakeFetch = async () => ({
+    ok: true,
+    json: async () => ({
+      choices: [{ message: { content: `\`\`\`html\n${GAME}\n\`\`\`` }, finish_reason: 'stop' }],
+      usage: { total_tokens: 4_900_000 },
+    }),
+  });
+  assert.equal(await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', fetchImpl: fakeFetch }), GAME);
+});
+
+test('максимум ответа: 128000 для gpt-5 и 16000 для остальных моделей OpenAI', async () => {
+  const sizes = {};
+  const make = (model) => async (url, init) => {
+    sizes[model] = JSON.parse(init.body).max_completion_tokens;
+    return { ok: true, json: async () => ({ choices: [{ message: { content: `\`\`\`html\n${GAME}\n\`\`\`` }, finish_reason: 'stop' }], usage: { total_tokens: 1 } }) };
+  };
+  for (const model of ['gpt-5', 'gpt-4.1']) {
+    await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', model, fetchImpl: make(model) });
+  }
+  assert.deepEqual(sizes, { 'gpt-5': 128000, 'gpt-4.1': 16000 });
 });

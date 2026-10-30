@@ -8,7 +8,7 @@ const { createBudget } = require('./lib/budget');
 const PORT = Number(process.env.PORT) || 3000;
 const DIST_DIR = path.join(__dirname, 'dist');
 const MAX_BODY = 64 * 1024;
-const DEFAULT_TOKEN_BUDGET = 5_000_000;
+const DEFAULT_GENERATION_TOKEN_LIMIT = 5_000_000;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -37,7 +37,8 @@ function getConfig() {
     reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || undefined : undefined,
     maxTokens: Number(env.MAX_TOKENS) || undefined,
     maxAttempts: Number(env.MAX_ATTEMPTS) || undefined,
-    tokenBudget: Number(env.TOKEN_BUDGET) || DEFAULT_TOKEN_BUDGET,
+    generationLimit: Number(env.GENERATION_TOKEN_LIMIT) || DEFAULT_GENERATION_TOKEN_LIMIT,
+    tokenBudget: Number(env.TOKEN_BUDGET) || 0,
     budgetFile: env.BUDGET_FILE || path.join(__dirname, '.usage.json'),
   };
 }
@@ -134,7 +135,7 @@ if (require.main === module) {
   const config = getConfig();
   createServer().listen(PORT, () => {
     console.log(`Game generator: http://localhost:${PORT}`);
-    console.log(`Провайдер: ${config.provider}, модель: ${config.model}, лимит токенов: ${config.tokenBudget.toLocaleString('ru-RU')}`);
+    console.log(`Провайдер: ${config.provider}, модель: ${config.model}, потолок на одну генерацию: ${config.generationLimit.toLocaleString('ru-RU')} токенов`);
     if (!config.apiKey && !config.authToken) {
       const name = config.provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
       console.log(`Внимание: не задан ${name} в файле .env, генерация вернёт ошибку 503.`);

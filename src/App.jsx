@@ -102,9 +102,9 @@ export default function App() {
           <span className="logo__mark">⚡</span>
           <span>GameForge</span>
         </div>
-        <span className="badge" id="usage" title="Использовано токенов из общего лимита">
+        <span className="badge" id="usage" title="Всего потрачено токенов с начала работы">
           {usage
-            ? `${usage.provider === 'openai' ? 'OpenAI' : 'Claude'} · ${usage.model} · ${usage.used.toLocaleString('ru-RU')} / ${usage.limit.toLocaleString('ru-RU')} токенов`
+            ? `${usage.provider === 'openai' ? 'OpenAI' : 'Claude'} · ${usage.model} · потрачено ${usage.used.toLocaleString('ru-RU')} токенов`
             : 'AI · HTML5 · WebView'}
         </span>
       </header>
