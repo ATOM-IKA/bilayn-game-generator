@@ -242,16 +242,16 @@ test('потолок одной генерации по умолчанию 5 000
   assert.equal(await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', fetchImpl: fakeFetch }), GAME);
 });
 
-test('максимум ответа: 128000 для gpt-5 и 16000 для остальных моделей OpenAI', async () => {
+test('максимум ответа: 128000 для моделей с рассуждением (gpt-5, gpt-6.1-sol, o3) и 16000 для остальных', async () => {
   const sizes = {};
   const make = (model) => async (url, init) => {
     sizes[model] = JSON.parse(init.body).max_completion_tokens;
     return { ok: true, json: async () => ({ choices: [{ message: { content: `\`\`\`html\n${GAME}\n\`\`\`` }, finish_reason: 'stop' }], usage: { total_tokens: 1 } }) };
   };
-  for (const model of ['gpt-5', 'gpt-4.1']) {
+  for (const model of ['gpt-5', 'gpt-6.1-sol', 'o3', 'gpt-4.1']) {
     await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', model, fetchImpl: make(model) });
   }
-  assert.deepEqual(sizes, { 'gpt-5': 128000, 'gpt-4.1': 16000 });
+  assert.deepEqual(sizes, { 'gpt-5': 128000, 'gpt-6.1-sol': 128000, o3: 128000, 'gpt-4.1': 16000 });
 });
 
 function scripted(replies) {
@@ -298,4 +298,30 @@ test('режим standard делает один запрос', async () => {
   const { fetchImpl, seen } = scripted([fence(GAME)]);
   await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', quality: 'standard', fetchImpl });
   assert.equal(seen.length, 1);
+});
+
+test('если API отклонил reasoning_effort, запрос повторяется без него', async () => {
+  const bodies = [];
+  const fakeFetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.reasoning_effort) return { ok: false, status: 400, text: async () => "Unsupported value: 'reasoning_effort'" };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: `\`\`\`html\n${GAME}\n\`\`\`` }, finish_reason: 'stop' }], usage: { total_tokens: 1 } }) };
+  };
+  const html = await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', fetchImpl: fakeFetch, reasoningEffort: 'max' });
+  assert.equal(html, GAME);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].reasoning_effort, undefined);
+});
+
+test('если API отклонил слишком большой max_completion_tokens, лимит уменьшается', async () => {
+  const sizes = [];
+  const fakeFetch = async (url, init) => {
+    const size = JSON.parse(init.body).max_completion_tokens;
+    sizes.push(size);
+    if (size > 32000) return { ok: false, status: 400, text: async () => 'max_completion_tokens is too large: 128000. This model supports at most 32768' };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: `\`\`\`html\n${GAME}\n\`\`\`` }, finish_reason: 'stop' }], usage: { total_tokens: 1 } }) };
+  };
+  await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', fetchImpl: fakeFetch, model: 'gpt-6.1-sol' });
+  assert.deepEqual(sizes, [128000, 32000]);
 });

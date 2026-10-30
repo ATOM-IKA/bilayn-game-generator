@@ -81,7 +81,7 @@ test('GET /api/usage отдаёт провайдера, модель и расх
     await withServer(async (base) => {
       const data = await (await fetch(`${base}/api/usage`)).json();
       assert.equal(data.provider, 'openai');
-      assert.equal(data.model, 'gpt-5');
+      assert.equal(data.model, 'gpt-6.1-sol');
       assert.equal(data.limit, 0);
       assert.equal(data.used, 0);
     });

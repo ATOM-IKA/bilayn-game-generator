@@ -2,7 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { generateGame, AUDIENCES } = require('./lib/generate');
-const { PROVIDERS } = require('./lib/providers');
+const { PROVIDERS, isReasoningModel } = require('./lib/providers');
 const { createBudget } = require('./lib/budget');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -36,7 +36,7 @@ function getConfig() {
     authToken: isOpenAi ? undefined : env.ANTHROPIC_AUTH_TOKEN,
     baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || undefined,
     // максимальное рассуждение по умолчанию для моделей, которые его поддерживают
-    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (/^(gpt-5|o\d)/.test(model) ? 'high' : undefined) : undefined,
+    reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (isReasoningModel(model) ? 'high' : undefined) : undefined,
     quality: env.QUALITY === 'standard' ? 'standard' : 'max',
     maxTokens: Number(env.MAX_TOKENS) || undefined,
     maxAttempts: Number(env.MAX_ATTEMPTS) || undefined,
