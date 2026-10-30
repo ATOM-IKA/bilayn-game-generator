@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const STEPS = ['Разбираем запрос', 'Продумываем дизайн и механику', 'Пишем код игры', 'Проверяем и улучшаем код', 'Финальная полировка'];
+const STEPS = ['Разбираем запрос', 'Продумываем механику', 'Пишем код игры', 'Проверяем и улучшаем'];
 
 export default function Loader() {
   const [step, setStep] = useState(0);
@@ -21,7 +21,7 @@ export default function Loader() {
   return (
     <div className="loader" role="status">
       <div className="loader__spinner" />
-      <p className="loader__hint">Режим максимального качества, не дольше 5 минут. Прошло {elapsed}</p>
+      <p className="loader__hint">Режим максимального качества, не дольше 15 минут. Прошло {elapsed}</p>
       <ul>
         {STEPS.map((label, i) => (
           <li key={label} className={i < step ? 'done' : i === step ? 'active' : ''}>

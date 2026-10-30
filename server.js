@@ -38,7 +38,7 @@ function getConfig() {
     apiKey: (isOpenAi ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY) || env.LLM_API_KEY,
     authToken: isOpenAi ? undefined : env.ANTHROPIC_AUTH_TOKEN,
     baseUrl: (isOpenAi ? env.OPENAI_BASE_URL : env.ANTHROPIC_BASE_URL) || env.LLM_BASE_URL || undefined,
-    // среднее рассуждение по умолчанию: high на этом шлюзе не укладывается в 5 минут
+    // среднее рассуждение по умолчанию: быстрее и дешевле, чем high
     reasoningEffort: isOpenAi ? env.OPENAI_REASONING_EFFORT || (isReasoningModel(model) ? 'medium' : undefined) : undefined,
     stallMs: Number(env.LLM_STALL_TIMEOUT_MS) || undefined,
     timeLimitMs: Number(env.GENERATION_TIMEOUT_MS) || undefined,

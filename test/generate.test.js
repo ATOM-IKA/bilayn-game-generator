@@ -268,27 +268,28 @@ function scripted(replies) {
 
 const fence = (html) => `\`\`\`html\n${html}\n\`\`\``;
 
-test('режим max: дизайн-документ, код по нему, затем ревью с улучшенной версией', async () => {
+test('режим max: один запрос с планом и кодом, затем ревью с улучшенной версией', async () => {
   const improved = GAME.replace('<canvas>', '<canvas id="improved">');
-  const { fetchImpl, seen } = scripted(['ДИЗАЙН: змейка с яблоками', fence(GAME), fence(improved)]);
+  const { fetchImpl, seen } = scripted([`\`\`\`text\nПЛАН: змейка\n\`\`\`\n${fence(GAME)}`, fence(improved)]);
 
   const html = await generateGame({ prompt: 'змейка' }, { provider: 'openai', apiKey: 'k', quality: 'max', fetchImpl });
 
-  assert.equal(html, improved);
-  assert.equal(seen.length, 3);
+  assert.equal(html, GAME.replace('<canvas>', '<canvas id="improved">'));
+  assert.equal(seen.length, 2, 'всего два обращения к модели');
   const userText = (body, i) => body.messages.filter((m) => m.role === 'user')[i].content;
-  assert.match(userText(seen[0], 0), /дизайн-документ/);
-  assert.match(userText(seen[1], 0), /ДИЗАЙН: змейка с яблоками/);
-  assert.match(userText(seen[2], 1), /строгое ревью/);
+  assert.match(userText(seen[0], 0), /опиши план/);
+  assert.match(userText(seen[1], 0), /строгое ревью/);
+  assert.ok(userText(seen[1], 0).includes(GAME), 'ревью видит игру');
+  assert.equal(seen[1].messages.filter((m) => m.role === 'user').length, 1, 'ревью без истории диалога');
 });
 
 test('режим max: если ревью сломало игру, остаётся рабочая версия', async () => {
-  const { fetchImpl } = scripted(['план', fence(GAME), fence('<p>сломано</p>')]);
+  const { fetchImpl } = scripted([fence(GAME), fence('<p>сломано</p>')]);
   const html = await generateGame({ prompt: 'x' }, { provider: 'openai', apiKey: 'k', quality: 'max', fetchImpl });
   assert.equal(html, GAME);
 });
 
-test('режим max: при доработке дизайн-документ не запрашивается', async () => {
+test('режим max: при доработке план не запрашивается', async () => {
   const { fetchImpl, seen } = scripted([fence(GAME), fence(GAME)]);
   await generateGame({ previous: GAME, change: 'кнопки больше' }, { provider: 'openai', apiKey: 'k', quality: 'max', fetchImpl });
   assert.equal(seen.length, 2);
@@ -454,16 +455,16 @@ test('зависший поток обрывается по таймауту м�
   assert.ok(logs.some((m) => m.startsWith('←') && m.includes('токенов')));
 });
 
-test('режим max: дизайн и ревью идут с низким рассуждением, код с заданным', async () => {
+test('режим max: код идёт с заданным рассуждением, ревью с низким', async () => {
   const efforts = [];
-  const replies = ['план', fence(GAME), fence(GAME)];
+  const replies = [fence(GAME), fence(GAME)];
   let i = 0;
   const fetchImpl = async (url, init) => {
     efforts.push(JSON.parse(init.body).reasoning_effort);
     return sse([replies[i++]]);
   };
   await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, quality: 'max', reasoningEffort: 'high' });
-  assert.deepEqual(efforts, ['low', 'high', 'low']);
+  assert.deepEqual(efforts, ['high', 'low']);
 });
 
 test('общий лимит времени: зависший код игры даёт GENERATION_TIMEOUT', async () => {
@@ -481,11 +482,43 @@ test('общий лимит времени: если на ревью време�
   let calls = 0;
   const fetchImpl = async () => {
     calls++;
-    return sse([calls === 1 ? 'план' : fence(GAME)]);
+    return sse([fence(GAME)]);
   };
   // срок 30 секунд меньше минимального запаса на ревью (60 секунд), поэтому ревью пропускается
   const html = await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, quality: 'max', timeLimitMs: 30000, log: (m) => logs.push(m) });
   assert.equal(html, GAME);
-  assert.equal(calls, 2);
+  assert.equal(calls, 1);
   assert.ok(logs.some((m) => m.includes('ревью пропущено')));
+});
+
+test('зависшее ревью не задерживает готовую игру дольше своего лимита времени', async () => {
+  let calls = 0;
+  const hanging = () => new Response(new ReadableStream({ start() {} }), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  const fetchImpl = async () => (++calls === 1 ? sse([fence(GAME)]) : hanging());
+  const started = Date.now();
+  const html = await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, quality: 'max', reviewTimeMs: 300, stallMs: 5000 });
+  assert.equal(html, GAME);
+  assert.equal(calls, 2);
+  assert.ok(Date.now() - started < 3000);
+});
+
+test('validateGame принимает keyup и pointerup как ввод', () => {
+  const html = '<canvas></canvas><script>addEventListener("keyup", () => {}); setInterval(() => {}, 16);</script>';
+  assert.equal(validateGame(html).ok, true);
+});
+
+test('на последней попытке игра с одними мягкими замечаниями принимается', async () => {
+  const noInput = '<canvas></canvas><script>requestAnimationFrame(() => {});</script>';
+  const { fetchImpl, seen } = scripted([fence(noInput), fence(noInput)]);
+  const logs = [];
+  const html = await generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, maxAttempts: 2, log: (m) => logs.push(m) });
+  assert.equal(html, noInput);
+  assert.equal(seen.length, 2, 'первая попытка просит исправить, вторая принимается');
+  assert.ok(logs.some((m) => m.includes('принята с замечаниями')));
+});
+
+test('серьёзные ошибки (синтаксис) не принимаются даже на последней попытке', async () => {
+  const broken = '<canvas></canvas><script>addEventListener("click", () => {}); function (</script>';
+  const { fetchImpl } = scripted([fence(broken), fence(broken)]);
+  await assert.rejects(generateGame({ prompt: 'x' }, { ...openAi, fetchImpl, maxAttempts: 2 }), /INVALID_GAME.*синтаксическая/);
 });
