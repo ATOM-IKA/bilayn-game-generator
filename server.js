@@ -70,7 +70,7 @@ async function handleGenerate(req, res) {
   try {
     const html = await generateGame(
       { prompt, audience, previous, change },
-      { apiKey: process.env.ANTHROPIC_API_KEY, model: MODEL, baseUrl: process.env.ANTHROPIC_BASE_URL || undefined, maxTokens: MAX_TOKENS, maxAttempts: MAX_ATTEMPTS },
+      { apiKey: process.env.ANTHROPIC_API_KEY, authToken: process.env.ANTHROPIC_AUTH_TOKEN, model: MODEL, baseUrl: process.env.ANTHROPIC_BASE_URL || undefined, maxTokens: MAX_TOKENS, maxAttempts: MAX_ATTEMPTS },
     );
     return send(res, 200, { html });
   } catch (err) {
@@ -105,7 +105,9 @@ function createServer({ publicDir = DIST_DIR } = {}) {
 if (require.main === module) {
   createServer().listen(PORT, () => {
     console.log(`Game generator: http://localhost:${PORT}  (model: ${MODEL})`);
-    if (!process.env.ANTHROPIC_API_KEY) console.log('Внимание: ANTHROPIC_API_KEY не задан, генерация вернёт ошибку 503.');
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+      console.log('Внимание: не задан ANTHROPIC_API_KEY (или ANTHROPIC_AUTH_TOKEN), генерация вернёт ошибку 503.');
+    }
   });
 }
 

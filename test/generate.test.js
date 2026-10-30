@@ -108,3 +108,14 @@ test('generateGame передаёт maxTokens и не повторяет зап�
   assert.equal(calls, 1);
   assert.equal(sentMax, 8000);
 });
+
+test('generateGame с authToken шлёт заголовок Authorization и работает без apiKey', async () => {
+  let headers;
+  const fakeFetch = async (url, init) => {
+    headers = init.headers;
+    return { ok: true, json: async () => ({ content: [{ type: 'text', text: `\`\`\`html\n${GAME}\n\`\`\`` }] }) };
+  };
+  await generateGame({ prompt: 'x' }, { authToken: 't', model: 'm', fetchImpl: fakeFetch });
+  assert.equal(headers.authorization, 'Bearer t');
+  assert.equal(headers['x-api-key'], undefined);
+});
